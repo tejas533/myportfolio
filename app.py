@@ -21,14 +21,26 @@ margin_of_safety = st.number_input("Margin of Safety (%)", value=20.0) / 100
 def get_stock_data(ticker):
     stock = yf.Ticker(ticker)
 
+    # Check if history is empty to detect invalid/non-existent tickers
+    history = stock.history(period="1d")
+    if history.empty:
+        raise ValueError(
+            f"No data found for ticker '{ticker}'. For Indian stocks, please append '.NS' (NSE) or '.BO' (BSE) - e.g., 'RELIANCE.NS', 'TCS.NS', or '500180.BO'."
+        )
+
     try:
         price = stock.fast_info["last_price"]
+        if price is None or np.isnan(price):
+            price = history["Close"].iloc[-1]
     except:
-        price = stock.history(period="1d")["Close"].iloc[-1]
+        price = history["Close"].iloc[-1]
 
     cashflow = stock.cashflow
     balance_sheet = stock.balance_sheet
     info = stock.info
+
+    if not isinstance(info, dict):
+        info = {}
 
     shares = info.get("sharesOutstanding", None)
     currency = info.get("currency", "N/A")
@@ -37,6 +49,8 @@ def get_stock_data(ticker):
     return stock, price, cashflow, balance_sheet, shares, currency, name
 
 def safe_get_statement_value(statement, possible_names):
+    if statement is None or not hasattr(statement, "index") or statement.empty:
+        return None
     for name in possible_names:
         if name in statement.index:
             values = statement.loc[name].dropna()
