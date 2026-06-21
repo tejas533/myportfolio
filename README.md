@@ -1,9 +1,9 @@
 # DCF Valuation Tool
 
-A modern, interactive Discounted Cash Flow (DCF) valuation application built with Streamlit, Python, and `yfinance`. It calculates the intrinsic value, Margin of Safety (MOS) buy price, and growth forecasts for US and Indian stocks using live market and financial statement data.
+A modern, interactive Discounted Cash Flow (DCF) valuation application built with Streamlit, Python, and `yfinance`. It calculates the intrinsic value, Margin of Safety (MOS) buy price, and growth forecasts for US, Indian, UK, and European stocks using live market and financial statement data.
 
 ## Features
-- **Ticker Auto-Resolution**: Supports US tickers (e.g., `AAPL`, `MSFT`) and Indian exchange tickers (e.g., `RELIANCE.NS`, `TCS.NS`, `500325.BO`).
+- **Ticker Auto-Resolution**: Supports US tickers (e.g., `AAPL`, `MSFT`), Indian exchanges (e.g., `RELIANCE.NS`, `500325.BO`), UK tickers (e.g., `BP.L`, `LLOY.L`), and European exchanges (e.g., `SAP.DE`, `MC.PA`, `ASML.AS`).
 - **Interactive DCF Parameters**: Customize forecast years, discount rate (WACC), terminal growth rate, and margin of safety.
 - **Historical Analysis & Forecasting**: Computes historical compound annual growth rate (CAGR) of Free Cash Flows (FCF) and forecasts future cash flows with recovery handling for negative FCFs.
 - **Valuation Dashboard**: Clearly displays Intrinsic Value, MOS Buy Price, and potential Upside/Downside percent.

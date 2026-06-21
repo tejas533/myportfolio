@@ -5,18 +5,47 @@ import numpy as np
 
 st.set_page_config(page_title="DCF Valuation App", layout="wide")
 
-st.title("DCF Valuation Tool - US & Indian Stocks")
+st.title("DCF Valuation Tool - Global Stocks")
 
 ticker = st.text_input(
     "Enter ticker",
     value="AAPL",
-    help="US: AAPL, MSFT, TSLA | India NSE: RELIANCE.NS, TCS.NS, INFY.NS | BSE: 500325.BO"
+    help="US: AAPL, MSFT | India: RELIANCE.NS, 500325.BO | UK: BP.L, LLOY.L | Europe: SAP.DE, MC.PA, ASML.AS"
 )
 
 forecast_years = st.slider("Forecast years", 5, 10, 5)
 discount_rate = st.number_input("Discount Rate / WACC (%)", value=10.0) / 100
 terminal_growth = st.number_input("Terminal Growth (%)", value=3.0) / 100
 margin_of_safety = st.number_input("Margin of Safety (%)", value=20.0) / 100
+
+def get_currency_conversion_factor(from_curr, to_curr):
+    if not from_curr or not to_curr:
+        return 1.0
+        
+    def normalize(c):
+        if c in ['GBp', 'GBX', 'GBx', 'gbp', 'gbx']:
+            return 'GBP', 100.0
+        return c.upper(), 1.0
+
+    from_base, from_mult = normalize(from_curr)
+    to_base, to_mult = normalize(to_curr)
+    
+    if from_base == to_base:
+        rate = 1.0
+    else:
+        ticker_name = f"{from_base}{to_base}=X"
+        try:
+            rate = yf.Ticker(ticker_name).fast_info['last_price']
+            if rate is None or np.isnan(rate):
+                hist = yf.Ticker(ticker_name).history(period="1d")
+                if not hist.empty:
+                    rate = hist["Close"].iloc[-1]
+                else:
+                    rate = 1.0
+        except Exception:
+            rate = 1.0
+            
+    return (1.0 / from_mult) * rate * to_mult
 
 def get_stock_data(ticker):
     stock = yf.Ticker(ticker)
@@ -25,7 +54,12 @@ def get_stock_data(ticker):
     history = stock.history(period="1d")
     if history.empty:
         raise ValueError(
-            f"No data found for ticker '{ticker}'. For Indian stocks, please append '.NS' (NSE) or '.BO' (BSE) - e.g., 'RELIANCE.NS', 'TCS.NS', or '500180.BO'."
+            f"No data found for ticker '{ticker}'. Please append the correct exchange suffix if applicable:\n"
+            f"- Indian stocks: append '.NS' (NSE) or '.BO' (BSE) - e.g., 'RELIANCE.NS', '500325.BO'\n"
+            f"- UK stocks: append '.L' - e.g., 'BP.L', 'LLOY.L'\n"
+            f"- German stocks: append '.DE' - e.g., 'SAP.DE'\n"
+            f"- French stocks: append '.PA' - e.g., 'MC.PA'\n"
+            f"- Dutch stocks: append '.AS' - e.g., 'ASML.AS'"
         )
 
     try:
@@ -45,8 +79,9 @@ def get_stock_data(ticker):
     shares = info.get("sharesOutstanding", None)
     currency = info.get("currency", "N/A")
     name = info.get("longName", ticker)
+    financial_currency = info.get("financialCurrency", currency)
 
-    return stock, price, cashflow, balance_sheet, shares, currency, name
+    return stock, price, cashflow, balance_sheet, shares, currency, name, financial_currency
 
 def safe_get_statement_value(statement, possible_names):
     if statement is None or not hasattr(statement, "index") or statement.empty:
@@ -95,7 +130,7 @@ def forecast_fcf(latest_fcf, oldest_fcf, years, growth_rate):
     return forecast
 
 try:
-    stock, price, cashflow, balance_sheet, shares, currency, name = get_stock_data(ticker)
+    stock, price, cashflow, balance_sheet, shares, currency, name, financial_currency = get_stock_data(ticker)
 
     st.subheader(f"{name}")
     st.metric("Latest Stock Price", f"{price:.2f} {currency}")
@@ -123,6 +158,21 @@ try:
     if operating_cf is None or capex is None:
         st.error("Cash flow data not available for this company.")
         st.stop()
+
+    conv_factor = get_currency_conversion_factor(financial_currency, currency)
+    if conv_factor != 1.0:
+        if operating_cf is not None:
+            operating_cf = operating_cf * conv_factor
+        if capex is not None:
+            capex = capex * conv_factor
+        if total_debt is not None:
+            total_debt = total_debt * conv_factor
+        if cash is not None:
+            cash = cash * conv_factor
+        st.info(
+            f"💱 **Currency Conversion Applied:** Financials are reported in **{financial_currency}**, but the stock trades in **{currency}**. "
+            f"Values have been converted at 1 {financial_currency} = {conv_factor:.4f} {currency}."
+        )
 
     fcf = operating_cf + capex
     fcf = fcf.dropna()
