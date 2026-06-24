@@ -2,6 +2,7 @@ import streamlit as st
 import yfinance as yf
 import pandas as pd
 import numpy as np
+import requests
 
 st.set_page_config(page_title="DCF Valuation App", layout="wide")
 
@@ -18,6 +19,7 @@ discount_rate = st.number_input("Discount Rate / WACC (%)", value=10.0) / 100
 terminal_growth = st.number_input("Terminal Growth (%)", value=3.0) / 100
 margin_of_safety = st.number_input("Margin of Safety (%)", value=20.0) / 100
 
+@st.cache_data(ttl=3600)
 def get_currency_conversion_factor(from_curr, to_curr):
     if not from_curr or not to_curr:
         return 1.0
@@ -35,9 +37,13 @@ def get_currency_conversion_factor(from_curr, to_curr):
     else:
         ticker_name = f"{from_base}{to_base}=X"
         try:
-            rate = yf.Ticker(ticker_name).fast_info['last_price']
+            session = requests.Session()
+            session.headers.update({
+                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+            })
+            rate = yf.Ticker(ticker_name, session=session).fast_info['last_price']
             if rate is None or np.isnan(rate):
-                hist = yf.Ticker(ticker_name).history(period="1d")
+                hist = yf.Ticker(ticker_name, session=session).history(period="1d")
                 if not hist.empty:
                     rate = hist["Close"].iloc[-1]
                 else:
@@ -47,8 +53,14 @@ def get_currency_conversion_factor(from_curr, to_curr):
             
     return (1.0 / from_mult) * rate * to_mult
 
+@st.cache_data(ttl=3600)
 def get_stock_data(ticker):
-    stock = yf.Ticker(ticker)
+    session = requests.Session()
+    session.headers.update({
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+    })
+    
+    stock = yf.Ticker(ticker, session=session)
 
     # Check if history is empty to detect invalid/non-existent tickers
     history = stock.history(period="1d")
@@ -81,7 +93,7 @@ def get_stock_data(ticker):
     name = info.get("longName", ticker)
     financial_currency = info.get("financialCurrency", currency)
 
-    return stock, price, cashflow, balance_sheet, shares, currency, name, financial_currency
+    return price, cashflow, balance_sheet, shares, currency, name, financial_currency
 
 def safe_get_statement_value(statement, possible_names):
     if statement is None or not hasattr(statement, "index") or statement.empty:
@@ -130,7 +142,7 @@ def forecast_fcf(latest_fcf, oldest_fcf, years, growth_rate):
     return forecast
 
 try:
-    stock, price, cashflow, balance_sheet, shares, currency, name, financial_currency = get_stock_data(ticker)
+    price, cashflow, balance_sheet, shares, currency, name, financial_currency = get_stock_data(ticker)
 
     st.subheader(f"{name}")
     st.metric("Latest Stock Price", f"{price:.2f} {currency}")
