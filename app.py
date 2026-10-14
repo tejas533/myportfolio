@@ -2,7 +2,6 @@ import streamlit as st
 import yfinance as yf
 import pandas as pd
 import numpy as np
-import requests
 
 st.set_page_config(page_title="DCF Valuation App", layout="wide")
 
@@ -37,13 +36,10 @@ def get_currency_conversion_factor(from_curr, to_curr):
     else:
         ticker_name = f"{from_base}{to_base}=X"
         try:
-            session = requests.Session()
-            session.headers.update({
-                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
-            })
-            rate = yf.Ticker(ticker_name, session=session).fast_info['last_price']
+            fx = yf.Ticker(ticker_name)
+            rate = fx.fast_info['last_price']
             if rate is None or np.isnan(rate):
-                hist = yf.Ticker(ticker_name, session=session).history(period="1d")
+                hist = fx.history(period="1d")
                 if not hist.empty:
                     rate = hist["Close"].iloc[-1]
                 else:
@@ -55,12 +51,8 @@ def get_currency_conversion_factor(from_curr, to_curr):
 
 @st.cache_data(ttl=3600)
 def get_stock_data(ticker):
-    session = requests.Session()
-    session.headers.update({
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
-    })
-    
-    stock = yf.Ticker(ticker, session=session)
+    # Let yfinance handle Yahoo's cookies itself (a custom requests session causes 401 errors)
+    stock = yf.Ticker(ticker)
 
     # Check if history is empty to detect invalid/non-existent tickers
     history = stock.history(period="1d")
@@ -83,15 +75,25 @@ def get_stock_data(ticker):
 
     cashflow = stock.cashflow
     balance_sheet = stock.balance_sheet
-    info = stock.info
 
+    # .info is the request Yahoo blocks most often, so treat it as optional
+    try:
+        info = stock.info
+    except Exception:
+        info = {}
     if not isinstance(info, dict):
         info = {}
 
-    shares = info.get("sharesOutstanding", None)
-    currency = info.get("currency", "N/A")
-    name = info.get("longName", ticker)
-    financial_currency = info.get("financialCurrency", currency)
+    def fast(key):
+        try:
+            return stock.fast_info[key]
+        except Exception:
+            return None
+
+    shares = info.get("sharesOutstanding") or fast("shares")
+    currency = info.get("currency") or fast("currency") or "N/A"
+    name = info.get("longName") or info.get("shortName") or ticker
+    financial_currency = info.get("financialCurrency") or currency
 
     return price, cashflow, balance_sheet, shares, currency, name, financial_currency
 
