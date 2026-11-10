@@ -3,10 +3,12 @@
 A modern, interactive Discounted Cash Flow (DCF) valuation application built with Streamlit, Python, and `yfinance`. It calculates the intrinsic value, Margin of Safety (MOS) buy price, and growth forecasts for US, Indian, UK, and European stocks using live market and financial statement data.
 
 ## Features
-- **Ticker Auto-Resolution**: Supports US tickers (e.g., `AAPL`, `MSFT`), Indian exchanges (e.g., `RELIANCE.NS`, `500325.BO`), UK tickers (e.g., `BP.L`, `LLOY.L`), and European exchanges (e.g., `SAP.DE`, `MC.PA`, `ASML.AS`).
-- **Interactive DCF Parameters**: Customize forecast years, discount rate (WACC), terminal growth rate, and margin of safety.
-- **Historical Analysis & Forecasting**: Computes historical compound annual growth rate (CAGR) of Free Cash Flows (FCF) and forecasts future cash flows with recovery handling for negative FCFs.
-- **Valuation Dashboard**: Clearly displays Intrinsic Value, MOS Buy Price, and potential Upside/Downside percent.
+- **Global tickers**: US (e.g., `AAPL`, `MSFT`), India (e.g., `RELIANCE.NS`, `500325.BO`), UK (e.g., `BP.L`, `LLOY.L`) and Europe (e.g., `SAP.DE`, `MC.PA`, `ASML.AS`), with automatic currency conversion.
+- **Operating forecast**: Free cash flow to firm (FCFF) built from revenue growth, EBIT margin, tax, D&A, capex and working capital, with defaults taken from the company's reported history.
+- **WACC build-up**: Cost of equity from CAPM, after-tax cost of debt and market-value weights, or a manual WACC.
+- **Equity bridge**: Enterprise value plus cash and short-term investments, less debt, minority interest and preferred stock.
+- **Sensitivity analysis**: Intrinsic value per share across a range of WACC and terminal growth rates.
+- **Valuation dashboard**: Intrinsic value, margin of safety buy price and upside/downside.
 
 ---
 
