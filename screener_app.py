@@ -869,7 +869,10 @@ def fetch_company(symbol):
     debt = _row(bal, ["Total Debt"])
     equity = _row(bal, ["Stockholders Equity", "Common Stock Equity"])
     cap = info.get("marketCap")
+    price = info.get("currentPrice") or info.get("regularMarketPrice")
     return {
+        "price": price,
+        "prev": info.get("previousClose") or info.get("regularMarketPreviousClose"),
         "n": info.get("longName") or info.get("shortName") or symbol,
         "t": symbol.split(".")[0],
         "cap": cap / 1e7 if cap else None,
@@ -883,6 +886,35 @@ def fetch_company(symbol):
         "industry": info.get("industry") or "",
         "summary": info.get("longBusinessSummary") or "",
     }
+
+
+@st.cache_data(ttl=15 * 60, show_spinner=False)
+def fetch_quotes(tickers):
+    """Live price, previous close and market cap (₹ Cr) for each ticker. Tries NSE, then BSE."""
+    import yfinance as yf
+
+    quotes, misses = {}, 0
+    for t in tickers:
+        for suffix in (".NS", ".BO"):
+            try:
+                fi = yf.Ticker(t + suffix).fast_info
+                price = fi["last_price"]
+                if price is None or price != price:
+                    continue
+                cap = fi["market_cap"]
+                prev = fi["previous_close"]
+                quotes[t] = {"price": float(price), "prev": float(prev) if prev else None,
+                             "cap": float(cap) / 1e7 if cap else None}
+                break
+            except Exception:
+                continue
+        if t in quotes:
+            misses = 0
+        else:
+            misses += 1
+            if misses >= 4 and not quotes:  # Yahoo is not answering, stop waiting
+                break
+    return quotes
 
 
 def to_symbol(raw):
@@ -936,11 +968,14 @@ def show_card(c, r):
         tag = f" · {c['moat']}" if c.get("moat") else (f" · {c['industry']}" if c.get("industry") else "")
         st.subheader(f"{c['n']} ({c['t']}){tag}")
         st.caption(status)
-        m = st.columns(4)
-        m[0].metric("Market cap", "n/a" if c.get("cap") is None else f"₹{c['cap']:,.0f} Cr")
-        m[1].metric("P/E", fmt(c.get("pe")))
-        m[2].metric("Net margin", fmt(r["margin"], "%"))
-        m[3].metric("Debt / equity", fmt(r["de"], "x", 2))
+        m = st.columns(5)
+        price, prev = c.get("price"), c.get("prev")
+        change = f"{(price / prev - 1) * 100:+.2f}% today" if price and prev else None
+        m[0].metric("Live price" if price else "Price", f"₹{price:,.2f}" if price else "n/a", change)
+        m[1].metric("Market cap", "n/a" if c.get("cap") is None else f"₹{c['cap']:,.0f} Cr")
+        m[2].metric("P/E", fmt(c.get("pe")))
+        m[3].metric("Net margin", fmt(r["margin"], "%"))
+        m[4].metric("Debt / equity", fmt(r["de"], "x", 2))
         n = len(c["sales"])
         labels = YEARS[-n:] if c.get("moat") else [f"Y{i + 1}" for i in range(n)]
         trend = "  →  ".join(f"{labels[i]} {s:,.0f}" for i, s in enumerate(c["sales"]) if s is not None)
@@ -988,11 +1023,27 @@ st.write("Find Indian small and mid caps in niche, monopoly or oligopoly busines
 tab1, tab2, tab3 = st.tabs(["Researched shortlist", "Screen your own stocks", "How it works"])
 
 with tab1:
-    st.caption("21 niche, monopoly and oligopoly companies, with business model and revenue drivers. "
-               "Annual figures to March 2026; prices from mid-November 2026.")
+    with st.spinner("Getting live prices"):
+        try:
+            quotes = fetch_quotes(tuple(c["t"] for c in CURATED))
+        except Exception:
+            quotes = {}
+    if quotes:
+        st.caption(f"21 niche, monopoly and oligopoly companies. Live price and market cap from Yahoo Finance "
+                   f"for {len(quotes)} of {len(CURATED)}, refreshed every 15 minutes. "
+                   "Annual figures to March 2026.")
+    else:
+        st.caption("21 niche, monopoly and oligopoly companies. Live prices are not available right now, "
+                   "so market cap and P/E are from mid-November 2026. Annual figures to March 2026.")
     rows = []
     for c in CURATED:
         item = dict(c, debt=c["bor"], equity=c["res"])
+        q = quotes.get(c["t"])
+        if q:
+            item["price"], item["prev"] = q["price"], q["prev"]
+            if q["cap"]:
+                item["pe"] = round(c["pe"] * q["cap"] / c["cap"], 1)  # same earnings, new price
+                item["cap"] = q["cap"]
         rows.append((item, evaluate(item, FILTERS)))
     show_results(rows)
 
