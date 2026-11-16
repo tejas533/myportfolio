@@ -971,7 +971,7 @@ def show_card(c, r):
         m = st.columns(5)
         price, prev = c.get("price"), c.get("prev")
         change = f"{(price / prev - 1) * 100:+.2f}% today" if price and prev else None
-        m[0].metric("Live price" if price else "Price", f"₹{price:,.2f}" if price else "n/a", change)
+        m[0].metric("Live price" if price else "Price", (f"₹{price:,.0f}" if price >= 1000 else f"₹{price:,.2f}") if price else "n/a", change)
         m[1].metric("Market cap", "n/a" if c.get("cap") is None else f"₹{c['cap']:,.0f} Cr")
         m[2].metric("P/E", fmt(c.get("pe")))
         m[3].metric("Net margin", fmt(r["margin"], "%"))
